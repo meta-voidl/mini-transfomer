@@ -24,18 +24,20 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 @dataclass
 class DataConfig:
     """Konfiguration für Datenpfade und grundlegende Datenparameter."""
-    # Ordner für Roh- und verarbeitete Daten
     data_dir: Path = PROJECT_ROOT / "data"
     raw_dir: Path = PROJECT_ROOT / "data" / "raw"
     processed_dir: Path = PROJECT_ROOT / "data" / "processed"
 
-    # Name der Textdatei, die wir herunterladen/verarbeiten (z. B. ein Buch)
     raw_text_filename: str = "corpus.txt"
 
-    # Maximale Sequenzlänge (Anzahl Tokens pro Trainingssample)
     max_seq_len: int = 128
+    val_split: float = 0.1
 
-    # Optional: Anteil der Daten, der für Validierung verwendet wird
+    # NEU: kein mutable Default, nur None
+    raw_text_sources: list[tuple[str, str]] | None = None
+
+
+    max_seq_len: int = 128
     val_split: float = 0.1
 
 
@@ -121,19 +123,19 @@ class DeviceConfig:
 
 @dataclass
 class Config:
-    """
-    Ober-Klasse, die alle Teilkonfigurationen bündelt.
-
-    Idee:
-    - Im restlichen Code nur noch ein Objekt `cfg` herumreichen.
-    - cfg.model, cfg.training, cfg.data, cfg.device sind jeweils eigene
-      Namensräume.
-    """
-    data: DataConfig = DataConfig()
+    data: DataConfig = DataConfig(
+        raw_text_sources=[
+            ("https://www.gutenberg.org/ebooks/11.txt.utf-8", "alice.txt"),
+            ("https://www.gutenberg.org/ebooks/1661.txt.utf-8", "sherlock.txt"),
+            ("https://www.gutenberg.org/ebooks/120.txt.utf-8", "treasure_island.txt"),
+            ("https://www.gutenberg.org/ebooks/1342.txt.utf-8", "pride_prejudice.txt"),
+            ("https://www.gutenberg.org/ebooks/2701.txt.utf-8", "moby_dick.txt"),
+            ("https://www.gutenberg.org/ebooks/84.txt.utf-8", "frankenstein.txt"),
+        ]
+    )
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     device: DeviceConfig = DeviceConfig()
-
 
 def print_config(cfg: Config) -> None:
     """

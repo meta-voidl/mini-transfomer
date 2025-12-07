@@ -11,6 +11,7 @@ dataset.py
 
 Mini-Modul für:
 - Download eines kleinen Beispieltextes (gemeinfreier Text / Project Gutenberg)
+- erweitert um mehere Beispieltexte
 - einfache Bereinigung (Preprocessing)
 - Laden des Rohltexts als Python-String
 
@@ -50,55 +51,89 @@ def ensure_data_directories(data_cfg: DataConfig) -> None:
     data_cfg.processed_dir.mkdir(parents=True, exist_ok=True)
 
 
-def download_corpus_if_needed(data_cfg: DataConfig) -> Path:
+def download_corpus_if_needed(data_cfg: DataConfig) -> list[Path]:
     """
-    Lädt den Beispieltext von GUTENBERG_URL herunter, falls die Datei
-    `data/raw/<raw_text_filename>` noch NICHT existiert.
+    Lädt einen oder mehrere Beispieltexte herunter, falls sie noch nicht existieren.
 
-    Gibt den Pfad zur Rohtextdatei zurück.
+    Rückgabe:
+        Liste von Pfaden zu Rohtextdateien unter data/raw/.
 
-    Hinweis:
-    - Verwendet bewusst nur Standardbibliothek (urllib), um Abhängigkeiten klein zu halten.
+    Fälle:
+    - data_cfg.raw_text_sources is None:
+        -> altes Verhalten: ein einzelner Text von GUTENBERG_URL nach raw_text_filename
+    - data_cfg.raw_text_sources ist eine Liste:
+        -> für jede (url, filename) wird data/raw/filename angelegt (falls fehlt)
     """
     ensure_data_directories(data_cfg)
 
-    raw_path = data_cfg.raw_dir / data_cfg.raw_text_filename
-    if raw_path.exists():
-        # Datei ist schon vorhanden – kein erneuter Download nötig.
-        return raw_path
+    raw_paths: list[Path] = []
 
-    print(f"[dataset] Lade Text von {GUTENBERG_URL} ...")
-    try:
-        with urllib.request.urlopen(GUTENBERG_URL) as response:
-            raw_bytes = response.read()
-    except Exception as e:
-        raise RuntimeError(f"Fehler beim Download des Korpus: {e}") from e
+    # Fall 1: keine expliziten Quellen angegeben -> Fallback auf Einzel-URL
+    if not data_cfg.raw_text_sources:
+        raw_path = data_cfg.raw_dir / data_cfg.raw_text_filename
+        if not raw_path.exists():
+            print(f"[dataset] Lade Text von {GUTENBERG_URL} ...")
+            try:
+                with urllib.request.urlopen(GUTENBERG_URL) as response:
+                    raw_bytes = response.read()
+            except Exception as e:
+                raise RuntimeError(f"Fehler beim Download des Korpus: {e}") from e
 
-    # Wir nehmen an, dass der Text in UTF-8 vorliegt (bei Project Gutenberg i. d. R. ok).
-    text = raw_bytes.decode("utf-8", errors="replace")
+            text = raw_bytes.decode("utf-8", errors="replace")
+            raw_path.write_text(text, encoding="utf-8")
+            print(f"[dataset] Rohtext gespeichert unter: {raw_path}")
 
-    # Text als Rohfassung speichern
-    raw_path.write_text(text, encoding="utf-8")
-    print(f"[dataset] Rohtext gespeichert unter: {raw_path}")
+        raw_paths.append(raw_path)
+        return raw_paths
 
-    return raw_path
+    # Fall 2: mehrere Quellen
+    for url, filename in data_cfg.raw_text_sources:
+        raw_path = data_cfg.raw_dir / filename
+        if raw_path.exists():
+            raw_paths.append(raw_path)
+            continue
 
+        print(f"[dataset] Lade Text von {url} ...")
+        try:
+            with urllib.request.urlopen(url) as response:
+                raw_bytes = response.read()
+        except Exception as e:
+            raise RuntimeError(f"Fehler beim Download des Korpus von {url}: {e}") from e
+
+        text = raw_bytes.decode("utf-8", errors="replace")
+        raw_path.write_text(text, encoding="utf-8")
+        print(f"[dataset] Rohtext gespeichert unter: {raw_path}")
+        raw_paths.append(raw_path)
+
+    return raw_paths
 
 def load_raw_text(data_cfg: DataConfig) -> str:
     """
-    Lädt den Rohltext aus der Datei `data/raw/<raw_text_filename>` als String.
-    Falls die Datei noch nicht existiert, wird sie vorher heruntergeladen.
+    Lädt einen oder mehrere Rohtexte als einen großen String.
+
+    - Falls mehrere Dateien existieren (raw_text_sources gesetzt),
+      werden sie in der Reihenfolge der Liste mit zwei Zeilenumbrüchen
+      dazwischen konkateniert.
 
     Rückgabe:
-        text (str): kompletter Inhalt der Rohtextdatei.
+        text (str): kompletter zusammengesetzter Rohltext.
     """
-    raw_path = download_corpus_if_needed(data_cfg)
-    text = raw_path.read_text(encoding="utf-8")
+    raw_paths = download_corpus_if_needed(data_cfg)
 
-    if not text.strip():
-        raise ValueError("Der geladene Rohtext ist leer. Bitte Download/Quelle prüfen.")
+    texts: list[str] = []
+    for p in raw_paths:
+        t = p.read_text(encoding="utf-8")
+        if t.strip():
+            texts.append(t)
 
-    return text
+    if not texts:
+        raise ValueError("Die geladenen Rohtexte sind alle leer. Bitte Quellen prüfen.")
+
+    # Mit Abstand zusammenkleben, damit der Übergang nicht verschmiert
+    full_text = "\n\n" + ("\n\n".join(texts)) + "\n\n"
+
+    return full_text
+
 
 
 def basic_clean_text(text: str) -> str:
