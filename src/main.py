@@ -172,47 +172,20 @@ def run_generation(
     Lädt Korpus + Tokenizer + Modell, zieht einen Checkpoint rein
     und generiert Text aus einem gegebenen Prompt.
     """
-    device = cfg.device.get_device()
-    print(f"[device] Verwende Device für Inferenz: {device}")
-    print(f"[gen] Lade Checkpoint: {checkpoint_path}")
-
-    # 1) Korpus laden & Tokenizer wie beim Training bauen
-    data_cfg = cfg.data
-    text = load_cleaned_text(data_cfg)
-
-    tokenizer = build_tokenizer_from_text(
-        text,
+    model, tokenizer, device = _load_model_and_tokenizer_for_inference(
+        cfg=cfg,
+        checkpoint_path=checkpoint_path,
         max_vocab_size=max_vocab_size,
-        min_freq=1,
-    )
-    print(f"[gen] Vokabulargröße: {tokenizer.vocab_size}")
-
-    # 2) Modell erstellen
-    pad_token_id = tokenizer.pad_id if tokenizer.pad_id is not None else 0
-    model = build_model_from_config(
-        cfg,
-        vocab_size=tokenizer.vocab_size,
-        pad_token_id=pad_token_id,
-    )
-    model.to(device)
-
-    # 3) Checkpoint laden
-    state = load_checkpoint(Path(checkpoint_path), map_location=device)
-    model.load_state_dict(state["model_state"])
-    model.eval()
-    print(
-        f"[gen] Checkpoint-Epoche: {state.get('epoch', '?')}, "
-        f"best_val_loss: {state.get('best_val_loss', '?')}"
     )
 
-    # 4) Prompt encoden
+    # Prompt -> IDs
     input_ids = tokenizer.encode(prompt, add_special_tokens=True)
     input_ids_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
 
     print(f"[gen] Prompt: {repr(prompt)}")
     print(f"[gen] Input-IDs-Länge: {input_ids_tensor.shape[1]}")
 
-    # 5) Generieren
+    # Generieren
     with torch.no_grad():
         generated_ids = model.generate(
             input_ids_tensor,
@@ -220,13 +193,13 @@ def run_generation(
             temperature=temperature,
         )
 
-    # 6) IDs -> Text
+    # IDs -> Text
     generated_ids_list = generated_ids[0].tolist()
-    generated_text = tokenizer.decode(generated_ids_list, skip_special_tokens=True)
+    generated_text = tokenizer.decode(generated_ids_list, skip_special_tokens=False)
 
-    print("\n==========[ GENERIERTER TEXT ]==========")
+    print("=" * 27 + "[ GENERIERTER TEXT ]" + "=" * 27)
     print(generated_text)
-    print("========================================\n")
+    print("=" * 80)
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +286,114 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
+
+
+
+
+
+
+
+def _load_model_and_tokenizer_for_inference(
+    cfg: Config,
+    checkpoint_path: str,
+    max_vocab_size: int | None = None,
+):
+    """
+    Gemeinsamer Helper für Inferenz/Visualisierung:
+
+    - lädt bereinigten Korpus
+    - trainiert CharTokenizer darauf
+    - baut den MiniTransformer mit korrekter vocab_size und pad_token_id
+    - lädt den Checkpoint
+    """
+    device = cfg.device.get_device()
+    print(f"[device] Verwende Device für Inferenz: {device}")
+    print(f"[gen] Lade Checkpoint: {checkpoint_path}")
+
+    # 1) Korpus laden & Tokenizer wie beim Training bauen
+    data_cfg = cfg.data
+    text = load_cleaned_text(data_cfg)
+
+    tokenizer = build_tokenizer_from_text(
+        text,
+        max_vocab_size=max_vocab_size,
+        min_freq=1,
+    )
+    print(f"[gen] Vokabulargröße: {tokenizer.vocab_size}")
+
+    # 2) Modell erstellen (gleiche Logik wie in run_generation)
+    pad_token_id = tokenizer.pad_id if tokenizer.pad_id is not None else 0
+    model = build_model_from_config(
+        cfg,
+        vocab_size=tokenizer.vocab_size,
+        pad_token_id=pad_token_id,
+    )
+    model.to(device)
+
+    # 3) Checkpoint laden
+    state = load_checkpoint(Path(checkpoint_path), map_location=device)
+    model.load_state_dict(state["model_state"])
+    model.eval()
+    print(
+        f"[gen] Checkpoint-Epoche: {state.get('epoch', '?')}, "
+        f"best_val_loss: {state.get('best_val_loss', '?')}"
+    )
+
+    return model, tokenizer, device
+
+def get_attentions_for_prompt(
+    cfg: Config,
+    checkpoint_path: str,
+    prompt: str,
+    max_vocab_size: int | None = None,
+):
+    """
+    Führt einen einzelnen Forward-Pass durch und gibt die Attention-Matrizen zurück.
+
+    Rückgabe:
+        tokens: Liste der dekodierten Token (z.B. Zeichen als Strings)
+        attentions: Liste von Tensors, Länge = n_layers
+            jedes Element: (B, H, T, T)
+    """
+    # 1) Modell + Tokenizer laden
+    model, tokenizer, device = _load_model_and_tokenizer_for_inference(
+        cfg=cfg,
+        checkpoint_path=checkpoint_path,
+        max_vocab_size=max_vocab_size,
+    )
+
+    # 2) Prompt encoden
+    input_ids = tokenizer.encode(prompt, add_special_tokens=True)
+    input_ids_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+
+    print(f"[attn] Prompt: {repr(prompt)}")
+    print(f"[attn] Input-IDs-Länge: {input_ids_tensor.shape[1]}")
+
+    # 3) Forward-Pass mit Attention-Rückgabe
+    with torch.no_grad():
+        logits, attentions = model(
+            input_ids_tensor,
+            return_attentions=True,
+        )
+
+    if attentions is None:
+        raise RuntimeError(
+            "Model hat keine Attention-Matrizen zurückgegeben. "
+            "Ist return_attentions in den Blöcken korrekt implementiert?"
+        )
+
+    # 4) Token-Strings aus den IDs machen (für spätere Visualisierung)
+    # Wir dekodieren jeden einzelnen ID wieder zu einem "Token-String".
+    token_strs = [tokenizer.decode([tid]) for tid in input_ids]
+
+
+    print(f"[attn] Anzahl Layer: {len(attentions)}")
+    for layer_idx, attn in enumerate(attentions):
+        B, H, T1, T2 = attn.shape
+        print(f"[attn] Layer {layer_idx}: Shape = {attn.shape}")
+        assert T1 == T2 == len(input_ids), "T und Prompt-Länge sollten übereinstimmen"
+
+    return token_strs, attentions
 
 
 # ---------------------------------------------------------------------------
