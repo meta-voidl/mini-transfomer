@@ -46,17 +46,17 @@ class ModelConfig:
     """Hyperparameter für das Transformer-Modell."""
 
     # Vektor-Dimension der Embeddings und der internen Repräsentation
-    d_model: int = 384
+    d_model: int = 256
 
     # Anzahl der Self-Attention-Heads
-    n_heads: int = 6
+    n_heads: int = 4
 
     # Anzahl der Decoder-Blöcke
-    n_layers: int = 6
+    n_layers: int = 4
 
     # Dimension des Feed-Forward-Netzwerks
     # (typisch 4 * d_model bei vielen Transformern)
-    d_ff: int = 4 * 384
+    d_ff: int = 4 * 256
 
     # Dropout-Rate für reguläre Dropout-Schichten
     dropout: float = 0.2

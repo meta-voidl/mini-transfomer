@@ -1,0 +1,21 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# IDE
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Training outputs (large files)
+runs/
+*.pt
+
+# Data files (optional - uncomment if you don't want to track raw data)
+# data/raw/
+# data/processed/
