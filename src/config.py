@@ -46,20 +46,20 @@ class ModelConfig:
     """Hyperparameter für das Transformer-Modell."""
 
     # Vektor-Dimension der Embeddings und der internen Repräsentation
-    d_model: int = 256
+    d_model: int = 384
 
     # Anzahl der Self-Attention-Heads
-    n_heads: int = 4
+    n_heads: int = 6
 
     # Anzahl der Decoder-Blöcke
-    n_layers: int = 4
+    n_layers: int = 6
 
     # Dimension des Feed-Forward-Netzwerks
     # (typisch 4 * d_model bei vielen Transformern)
-    d_ff: int = 4 * 256
+    d_ff: int = 4 * 384
 
     # Dropout-Rate für reguläre Dropout-Schichten
-    dropout: float = 0.1
+    dropout: float = 0.2
 
     # Maximale Sequenzlänge, muss mit DataConfig.max_seq_len harmonieren
     max_seq_len: int = 128
@@ -82,7 +82,7 @@ class TrainingConfig:
     learning_rate: float = 3e-4
 
     # Gewichtungszerfall für AdamW (leichte Regularisierung)
-    weight_decay: float = 1e-2
+    weight_decay: float = 3e-2
 
     # Optional: Clipping der Gradienten-Norm zur Stabilisierung
     max_grad_norm: float = 1.0
@@ -131,6 +131,13 @@ class Config:
             ("https://www.gutenberg.org/ebooks/1342.txt.utf-8", "pride_prejudice.txt"),
             ("https://www.gutenberg.org/ebooks/2701.txt.utf-8", "moby_dick.txt"),
             ("https://www.gutenberg.org/ebooks/84.txt.utf-8", "frankenstein.txt"),
+            # NEU: 6 weitere Bücher
+            ("https://www.gutenberg.org/ebooks/42.txt.utf-8", "jekyll_hyde.txt"),
+            ("https://www.gutenberg.org/ebooks/174.txt.utf-8", "dorian_gray.txt"),
+            ("https://www.gutenberg.org/ebooks/35.txt.utf-8", "time_machine.txt"),
+            ("https://www.gutenberg.org/ebooks/36.txt.utf-8", "war_of_the_worlds.txt"),
+            ("https://www.gutenberg.org/ebooks/55.txt.utf-8", "wizard_of_oz.txt"),
+            ("https://www.gutenberg.org/ebooks/32325.txt.utf-8", "huckleberry_finn.txt"),
         ]
     )
     model: ModelConfig = ModelConfig()

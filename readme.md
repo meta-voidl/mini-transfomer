@@ -56,3 +56,16 @@ mini_transformer/
 
 Ubuntu 22.04.5 LTS with a high-performance hardware setup including an MSI motherboard, an Intel i7-14700F CPU, 32GB of RAM, and an NVIDIA RTX 4080 GPU. 
 PyCharm is the IDE.
+
+
+### some useful scripts 
+start training
+python -m src.main   --train   --epochs 5   --batch-size 32   --max-vocab-size 256   --logdir runs/12books_bigmodel_6heads_e5
+tensorboard --logdir runs
+#### dataset generation
+python -m src.dataset 
+
+
+
+
+
